@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 from app.config import get_settings
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated=["bcrypt"])
 ALGORITHM = "HS256"
 
 
@@ -33,4 +33,3 @@ def decode_access_token(token: str) -> str | None:
         return None
     subject = payload.get("sub")
     return subject if isinstance(subject, str) else None
-
