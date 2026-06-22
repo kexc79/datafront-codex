@@ -1,2 +1,0 @@
-"""DataFront API package."""
-
