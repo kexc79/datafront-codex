@@ -295,30 +295,59 @@ function MatrixView({ api }) {
     load();
   }, []);
 
-  async function toggle(item) {
-    await api.patch(`/admin/customer-projects/${item.id}`, { active: !item.active });
+  async function toggle(pair) {
+    await api.patch(`/admin/customer-projects/${pair.id}`, { active: !pair.active });
     await load();
   }
+
+  const projects = Array.from(
+    new Map(rows.map((item) => [item.project.id, item.project])).values()
+  ).sort((left, right) => left.type.localeCompare(right.type));
+
+  const customers = Array.from(
+    new Map(rows.map((item) => [item.customer.id, item.customer])).values()
+  ).sort((left, right) => left.oracle_id - right.oracle_id);
+
+  const matrixRows = customers.map((customer) => {
+    const row = {
+      customer: customer.display_name,
+    };
+    for (const project of projects) {
+      row[`project_${project.id}`] = rows.find(
+        (item) => item.customer.id === customer.id && item.project.id === project.id
+      );
+    }
+    return row;
+  });
 
   return (
     <section className="contentBand">
       <div className="toolbar"><button className="secondaryButton" onClick={load}><RefreshCw size={16} /> Обновить</button></div>
       <DataGrid
-        rows={rows.map((item) => ({ id: item.id, customer: item.customer.display_name, project: item.project.type, optypes: item.project.optypes, active: item.active }))}
+        rows={matrixRows}
         columnDefs={[
-          { field: "customer", headerName: "Заказчик", rowGroup: true, hide: true },
-          { field: "project", headerName: "Проект" },
-          { field: "optypes", headerName: "Оптайпы" },
-          {
-            field: "active",
-            headerName: "Используется",
-            width: 150,
-            cellRenderer: (params) => (
-              <button className={params.value ? "gridToggle on" : "gridToggle"} onClick={() => toggle(params.data)}>
-                {params.value ? "Да" : "Нет"}
-              </button>
-            ),
-          },
+          { field: "customer", headerName: "Заказчик", pinned: "left", minWidth: 260, flex: 1 },
+          ...projects.map((project) => ({
+            field: `project_${project.id}`,
+            headerName: project.type,
+            minWidth: 130,
+            flex: 0,
+            sortable: false,
+            filter: false,
+            cellRenderer: (params) => {
+              const pair = params.value;
+              if (!pair) return "";
+              return (
+                <button
+                  className={pair.active ? "gridToggle on" : "gridToggle"}
+                  title={pair.active ? "Отключить сочетание" : "Включить сочетание"}
+                  onClick={() => toggle(pair)}
+                >
+                  {pair.active ? "✓" : ""}
+                </button>
+              );
+            },
+          })),
         ]}
       />
     </section>
