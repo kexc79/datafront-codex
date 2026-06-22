@@ -26,6 +26,7 @@ services:
         required: false
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-datafront}:${POSTGRES_PASSWORD:-datafront}@postgres:5432/${POSTGRES_DB:-datafront}
+      LD_LIBRARY_PATH: ${ORACLE_INSTANT_CLIENT_DIR:-/opt/oracle/instantclient}
     depends_on:
       postgres:
         condition: service_healthy
