@@ -14,22 +14,66 @@ PROJECTS_SQL = (
     "from anet.saletypes t where t.type is not null and t.active_df = 1 group by t.type"
 )
 
+_client_init_attempted = False
+_client_init_error: str | None = None
 
-def init_oracle_client() -> None:
+
+def init_oracle_client() -> dict[str, Any]:
+    global _client_init_attempted, _client_init_error
     settings = get_settings()
+    status = {
+        "dsn": settings.oracle_dsn,
+        "user": settings.oracle_user,
+        "thick_mode_requested": settings.oracle_enable_thick_mode,
+        "instant_client_dir": settings.oracle_instant_client_dir,
+        "instant_client_dir_exists": Path(settings.oracle_instant_client_dir).exists(),
+        "thin_mode": oracledb.is_thin_mode(),
+        "client_init_error": _client_init_error,
+    }
     if not settings.oracle_enable_thick_mode:
-        return
+        return status
+    if _client_init_attempted:
+        status["thin_mode"] = oracledb.is_thin_mode()
+        status["client_init_error"] = _client_init_error
+        return status
+    _client_init_attempted = True
     client_dir = Path(settings.oracle_instant_client_dir)
-    if client_dir.exists():
-        try:
-            oracledb.init_oracle_client(lib_dir=str(client_dir))
-        except Exception:
-            pass
+    if not client_dir.exists():
+        _client_init_error = f"Oracle Instant Client directory does not exist: {client_dir}"
+        status["client_init_error"] = _client_init_error
+        return status
+    try:
+        oracledb.init_oracle_client(lib_dir=str(client_dir))
+        _client_init_error = None
+    except Exception as exc:
+        _client_init_error = str(exc)
+    status["thin_mode"] = oracledb.is_thin_mode()
+    status["client_init_error"] = _client_init_error
+    return status
+
+
+def oracle_status() -> dict[str, Any]:
+    status = init_oracle_client()
+    try:
+        settings = get_settings()
+        with oracledb.connect(user=settings.oracle_user, password=settings.oracle_password, dsn=settings.oracle_dsn) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("select 1 from dual")
+                cursor.fetchone()
+        status["connection_ok"] = True
+        status["connection_error"] = None
+    except Exception as exc:
+        status["connection_ok"] = False
+        status["connection_error"] = str(exc)
+    status["thin_mode"] = oracledb.is_thin_mode()
+    return status
 
 
 def fetch_oracle_rows(sql_text: str) -> list[dict[str, Any]]:
     settings = get_settings()
-    init_oracle_client()
+    status = init_oracle_client()
+    if settings.oracle_enable_thick_mode and status.get("client_init_error"):
+        raise RuntimeError(f"Oracle Instant Client initialization failed: {status['client_init_error']}")
     with oracledb.connect(user=settings.oracle_user, password=settings.oracle_password, dsn=settings.oracle_dsn) as connection:
         with connection.cursor() as cursor:
             cursor.execute(sql_text)
@@ -106,4 +150,3 @@ def ensure_customer_project_matrix(db: Session) -> int:
                 created += 1
     db.commit()
     return created
-
