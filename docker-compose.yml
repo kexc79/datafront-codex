@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-datafront}
+      POSTGRES_USER: ${POSTGRES_USER:-datafront}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datafront}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datafront} -d ${POSTGRES_DB:-datafront}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploaded-files:${UPLOAD_ROOT:-/var/lib/datafront/uploads}
+      - ./oracle/instantclient:${ORACLE_INSTANT_CLIENT_DIR:-/opt/oracle/instantclient}:ro
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_AG_GRID_LICENSE_KEY: ${VITE_AG_GRID_LICENSE_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5137:80"
+
+volumes:
+  postgres-data:
+  uploaded-files:
