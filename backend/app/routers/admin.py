@@ -14,7 +14,7 @@ from app.models import (
     Role,
     User,
 )
-from app.oracle import ensure_customer_project_matrix, fetch_oracle_rows, sync_customers, sync_projects
+from app.oracle import ensure_customer_project_matrix, fetch_oracle_rows, oracle_status, sync_customers, sync_projects
 from app.schemas import (
     AccessScopeCreate,
     AccessScopeRead,
@@ -142,6 +142,11 @@ def update_customer_project(item_id: int, payload: CustomerProjectUpdate, db: Se
 @router.get("/dictionary-queries", response_model=list[OracleDictionaryQueryRead])
 def list_dictionary_queries(db: Session = Depends(get_db)) -> list[OracleDictionaryQuery]:
     return db.query(OracleDictionaryQuery).order_by(OracleDictionaryQuery.key).all()
+
+
+@router.get("/oracle/status")
+def get_oracle_status() -> dict:
+    return oracle_status()
 
 
 @router.put("/dictionary-queries/{key}", response_model=OracleDictionaryQueryRead)
